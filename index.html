@@ -1,0 +1,305 @@
+
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>가위바위보 룰렛</title>
+
+<style>
+    * {
+        box-sizing: border-box;
+    }
+
+    body {
+        margin: 0;
+        min-height: 100vh;
+        background: #f1f5f9;
+        font-family: "Malgun Gothic", sans-serif;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        padding: 20px;
+        color: #1e293b;
+    }
+
+    h1 {
+        font-size: clamp(32px, 6vw, 55px);
+        margin: 0 0 20px;
+        font-weight: 900;
+    }
+
+    #result {
+        font-size: clamp(38px, 8vw, 72px);
+        font-weight: 900;
+        color: #2563eb;
+        min-height: 100px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        text-align: center;
+        margin-bottom: 15px;
+    }
+
+    .wheel-container {
+        position: relative;
+        width: min(78vw, 420px);
+        aspect-ratio: 1;
+        margin: 10px auto 35px;
+    }
+
+    canvas {
+        width: 100%;
+        height: 100%;
+        display: block;
+        filter: drop-shadow(0 8px 12px rgba(0,0,0,0.18));
+    }
+
+    /* 원판 위쪽의 화살표 */
+    .pointer {
+        position: absolute;
+        top: -18px;
+        left: 50%;
+        transform: translateX(-50%);
+        width: 0;
+        height: 0;
+        border-left: 22px solid transparent;
+        border-right: 22px solid transparent;
+        border-top: 42px solid #1e293b;
+        z-index: 2;
+    }
+
+    button {
+        width: min(90vw, 360px);
+        min-height: 85px;
+        border: none;
+        border-radius: 22px;
+        font-size: 35px;
+        font-weight: 900;
+        cursor: pointer;
+        background: #2563eb;
+        color: white;
+        box-shadow: 0 6px 0 #1d4ed8;
+        transition: transform 0.1s, background 0.2s;
+    }
+
+    button:active {
+        transform: translateY(5px);
+        box-shadow: 0 1px 0 #1d4ed8;
+    }
+
+    button:disabled {
+        background: #94a3b8;
+        box-shadow: 0 6px 0 #64748b;
+        cursor: not-allowed;
+    }
+
+    #again {
+        display: none;
+        margin-top: 20px;
+        background: #16a34a;
+        box-shadow: 0 6px 0 #15803d;
+    }
+
+    #again:active {
+        box-shadow: 0 1px 0 #15803d;
+    }
+
+    .hint {
+        font-size: 20px;
+        color: #64748b;
+        margin-top: 25px;
+        text-align: center;
+    }
+</style>
+</head>
+
+<body>
+
+<h1>가위바위보 룰렛</h1>
+
+<div id="result" aria-live="polite">
+    룰렛을 돌려보세요!
+</div>
+
+<div class="wheel-container">
+    <div class="pointer"></div>
+    <canvas id="wheel" width="600" height="600"></canvas>
+</div>
+
+<button id="spin">돌리기</button>
+<button id="again">다시 돌리기</button>
+
+<div class="hint">버튼을 누르면 룰렛이 돌아갑니다.</div>
+
+<script>
+const canvas = document.getElementById("wheel");
+const ctx = canvas.getContext("2d");
+
+const result = document.getElementById("result");
+const spinButton = document.getElementById("spin");
+const againButton = document.getElementById("again");
+
+const choices = [
+    { name: "가위", color: "#F87171" },
+    { name: "바위", color: "#60A5FA" },
+    { name: "보", color: "#4ADE80" }
+];
+
+const center = 300;
+const radius = 285;
+const slice = Math.PI * 2 / 3;
+
+let rotation = 0;
+let spinning = false;
+
+// 원판 그리기
+function drawWheel() {
+    ctx.clearRect(0, 0, 600, 600);
+
+    choices.forEach((choice, i) => {
+        const start = rotation - Math.PI / 2 + i * slice;
+        const end = start + slice;
+
+        // 원판의 각 칸
+        ctx.beginPath();
+        ctx.moveTo(center, center);
+        ctx.arc(center, center, radius, start, end);
+        ctx.closePath();
+        ctx.fillStyle = choice.color;
+        ctx.fill();
+
+        ctx.strokeStyle = "#ffffff";
+        ctx.lineWidth = 8;
+        ctx.stroke();
+
+        // 글자 표시
+        const middle = start + slice / 2;
+        const textRadius = 175;
+
+        const x = center + Math.cos(middle) * textRadius;
+        const y = center + Math.sin(middle) * textRadius;
+
+        ctx.save();
+        ctx.translate(x, y);
+        ctx.rotate(middle + Math.PI / 2);
+
+        ctx.fillStyle = "#172033";
+        ctx.font = "bold 65px Malgun Gothic, sans-serif";
+        ctx.textAlign = "center";
+        ctx.textBaseline = "middle";
+        ctx.fillText(choice.name, 0, 0);
+
+        ctx.restore();
+    });
+
+    // 가운데 원형 장식
+    ctx.beginPath();
+    ctx.arc(center, center, 35, 0, Math.PI * 2);
+    ctx.fillStyle = "#ffffff";
+    ctx.fill();
+    ctx.strokeStyle = "#334155";
+    ctx.lineWidth = 5;
+    ctx.stroke();
+}
+
+// 초기 원판
+drawWheel();
+
+// 결과 판정
+function getResult() {
+    const normalized =
+        ((rotation % (Math.PI * 2)) + Math.PI * 2) %
+        (Math.PI * 2);
+
+    // 화살표는 12시 방향
+    const angle = (Math.PI * 2 - normalized) %
+                  (Math.PI * 2);
+
+    const index = Math.floor(angle / slice);
+
+    return choices[index].name;
+}
+
+// 룰렛 회전
+function spinWheel() {
+    if (spinning) return;
+
+    spinning = true;
+    spinButton.disabled = true;
+    againButton.style.display = "none";
+
+    result.textContent = "빙글빙글 돌아갑니다!";
+
+    // 무작위 회전 횟수 및 정지 위치
+    const extraTurns = 5 + Math.floor(Math.random() * 4);
+    const targetIndex = Math.floor(Math.random() * 3);
+
+    const targetAngle =
+        (Math.PI * 2) -
+        (targetIndex * slice + slice / 2);
+
+    const current = rotation;
+    const currentNormalized =
+        ((current % (Math.PI * 2)) + Math.PI * 2) %
+        (Math.PI * 2);
+
+    const finalRotation =
+        current +
+        extraTurns * Math.PI * 2 +
+        ((targetAngle - currentNormalized +
+        Math.PI * 2) % (Math.PI * 2));
+
+    const duration = 4500;
+    const startTime = performance.now();
+
+    function animate(now) {
+        const elapsed = now - startTime;
+        const progress = Math.min(elapsed / duration, 1);
+
+        // 처음에는 빠르게, 마지막에는 천천히 정지
+        const easeOut = 1 - Math.pow(1 - progress, 5);
+
+        rotation =
+            current + (finalRotation - current) * easeOut;
+
+        drawWheel();
+
+        if (progress < 1) {
+            requestAnimationFrame(animate);
+        } else {
+            rotation = finalRotation;
+            drawWheel();
+
+            const finalResult = getResult();
+
+            result.textContent = finalResult + "!";
+
+            spinning = false;
+            spinButton.disabled = false;
+            spinButton.textContent = "다시 돌리기";
+            againButton.style.display = "none";
+        }
+    }
+
+    requestAnimationFrame(animate);
+}
+
+// 버튼 연결
+spinButton.addEventListener("click", spinWheel);
+
+againButton.addEventListener("click", () => {
+    result.textContent = "룰렛을 돌려보세요!";
+    spinButton.textContent = "돌리기";
+    spinButton.disabled = false;
+    againButton.style.display = "none";
+});
+
+// 첫 화면 그리기
+drawWheel();
+
+</script>
+
+</body>
+</html>
